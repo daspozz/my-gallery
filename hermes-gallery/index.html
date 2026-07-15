@@ -76,18 +76,17 @@
 
 <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 <script>
-// ==== CONFIG - REPLACE THESE TWO VALUES ====
-const SUPABASE_URL = 'https://xrrwoeduzjchgkkxpbia.supabase.co/';  // ← from Supabase Settings → API → Project URL
-const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhycndvZWR1empjaGdra3hwYmlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQwODMyOTIsImV4cCI6MjA5OTY1OTI5Mn0.GkgyqPU30SQTopmOmhQ2WsHSonJzwQRgi7_2JBWk6yM';              // ← from Supabase Settings → API → anon/public key
-// ===============================================
+// ==== CONFIG - PLACEHOLDERS (replaced at build by Netlify) ====
+const SUPABASE_URL = '__SUPABASE_URL__';
+const ANON_KEY = '__ANON_KEY__';
+// ===============================================================
 
-// Your Netlify site (already filled in)
 const UPLOAD_ENDPOINT = 'https://chipper-meringue-cb5b77.netlify.app/.netlify/functions/api/upload';
 
 let token = null;
 
 async function login() {
-  token = 'dummy-admin-token'; // placeholder
+  token = 'dummy-admin-token';
 }
 
 async function loadGallery() {
@@ -134,7 +133,6 @@ document.getElementById('item-form').addEventListener('submit', async e => {
 
   if (!file) return alert('Pick an image');
 
-  // Convert file to base64
   const base64 = await new Promise(resolve => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result.split(',')[1]);
