@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Image Gallery</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+  <style>
+    .gallery { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+    .card { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; position: relative; }
+    .card img { width: 100%; height: auto; display: block; }
+    .card .info { padding: .5rem; position: absolute; bottom: .5rem; left: .5rem; right: .5rem; background: rgba(255,255,255,.8); }
+    .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); align-items:center; justify-content:center; }
+    .modal.active { display:flex; }
+    .modal-content { background:#fff; padding:1rem; max-width:90%; width:90%; }
+  </style>
+</head>
+<body>
+
+<header class="hero is-danger">
+  <div class="hero-body">
+    <h1 class="title">My Image Gallery</h1>
+  </div>
+</header>
+
+<section class="section">
+  <div class="container">
+    <div class="field has-addons mb-4">
+      <div class="control">
+        <button class="button is-primary" id="open-modal">Add Image</button>
+      </div>
+      <div class="control">
+        <label class="checkbox">
+          <input type="checkbox" id="private-toggle">
+          Private (gallery-private bucket)
+        </label>
+      </div>
+    </div>
+    <div class="gallery" id="gallery"></div>
+  </div>
+</section>
+
+<div class="modal" id="modal">
+  <div class="modal-content">
+    <h2 class="title">Add Image</h2>
+    <form id="item-form">
+      <div class="field">
+        <label class="label">Image file</label>
+        <input type="file" id="file-input" accept="image/*" required>
+      </div>
+      <div class="field">
+        <label class="label">Caption</label>
+        <textarea class="textarea" id="caption" rows="3"></textarea>
+      </div>
+      <div class="field">
+        <label class="label">Tags (comma-separated)</label>
+        <input type="text" id="tags" class="input" placeholder="e.g. portrait, sunset">
+      </div>
+      <div class="field">
+        <label class="label">Comment (optional)</label>
+        <textarea class="textarea" id="comment" rows="2"></textarea>
+      </div>
+      <div class="field">
+        <label class="checkbox">
+          <input type="checkbox" id="private-toggle">
+          Private (only visible to me)
+        </label>
+      </div>
+      <div class="field">
+        <button class="button is-primary" type="submit">Save</button>
+        <a class="button is-light" href="#" id="close-modal">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script>
+// ==== CONFIG - REPLACE THESE TWO VALUES ====
+const SUPABASE_URL = 'https://xrrwoeduzjchgkkxpbia.supabase.co/';  // ← from Supabase Settings → API → Project URL
+const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhycndvZWR1empjaGdra3hwYmlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQwODMyOTIsImV4cCI6MjA5OTY1OTI5Mn0.GkgyqPU30SQTopmOmhQ2WsHSonJzwQRgi7_2JBWk6yM';              // ← from Supabase Settings → API → anon/public key
+// ===============================================
+
+// Your Netlify site (already filled in)
+const UPLOAD_ENDPOINT = 'https://chipper-meringue-cb5b77.netlify.app/.netlify/functions/api/upload';
+
+let token = null;
+
+async function login() {
+  token = 'dummy-admin-token'; // placeholder
+}
+
+async function loadGallery() {
+  const gallery = document.getElementById('gallery');
+  gallery.innerHTML = '<p class="has-text-centered">Loading...</p>';
+  
+  try {
+    const res = await axios.get(`${SUPABASE_URL}/rest/v1/gallery_items?order=created_at.desc`, {
+      headers: { 'apikey': ANON_KEY, 'Authorization': `Bearer ${token}` }
+    });
+    gallery.innerHTML = '';
+    res.data.forEach(item => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <img src="${item.image_url}" alt="${item.caption || ''}">
+        <div class="info">
+          <strong>${item.caption || ''}</strong><br>
+          <small>${item.tags ? item.tags.join(', ') : ''}</small>
+        </div>
+      `;
+      gallery.appendChild(card);
+    });
+  } catch (err) {
+    gallery.innerHTML = '<p class="has-text-centered has-text-danger">Failed to load gallery</p>';
+    console.error(err);
+  }
+}
+
+document.getElementById('open-modal').addEventListener('click', () => {
+  document.getElementById('modal').classList.add('active');
+});
+document.getElementById('close-modal').addEventListener('click', () => {
+  document.getElementById('modal').classList.remove('active');
+});
+
+document.getElementById('item-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const file = document.getElementById('file-input').files[0];
+  const caption = document.getElementById('caption').value;
+  const tags = document.getElementById('tags').value.split(',').map(t => t.trim()).filter(t => t);
+  const comment = document.getElementById('comment').value;
+  const bucket = document.getElementById('private-toggle').checked ? 'gallery-private' : 'gallery-public';
+
+  if (!file) return alert('Pick an image');
+
+  // Convert file to base64
+  const base64 = await new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.readAsDataURL(file);
+  });
+
+  try {
+    const res = await axios.post(UPLOAD_ENDPOINT, {
+      fileBase64: base64,
+      fileName: file.name,
+      caption,
+      tags,
+      comment,
+      bucket
+    }, { headers: { 'Content-Type': 'application/json' } });
+
+    if (res.data.success) {
+      document.getElementById('modal').classList.remove('active');
+      document.getElementById('item-form').reset();
+      loadGallery();
+    } else {
+      alert('Upload failed: ' + res.data.error);
+    }
+  } catch (err) {
+    alert('Error: ' + (err.response?.data?.error || err.message));
+    console.error(err);
+  }
+});
+
+login();
+loadGallery();
+</script>
+</body>
+</html>
