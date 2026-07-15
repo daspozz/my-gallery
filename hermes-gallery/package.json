@@ -1,0 +1,12 @@
+{
+  "name": "hermes-gallery",
+  "version": "1.0.0",
+  "description": "Image gallery with Supabase Storage",
+  "main": "index.html",
+  "scripts": {
+    "build": "echo 'Static site - no build needed'"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.110.5"
+  }
+}
