@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Image Gallery</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+  <style>
+    body { font-family: Tahoma, sans-serif; font-weight: bold; }
+    .gallery { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+    .card { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; position: relative; }
+    .card img { width: 100%; height: auto; display: block; }
+    .card .info { padding: .5rem; position: absolute; bottom: .5rem; left: .5rem; right: .5rem; background: rgba(255,255,255,.8); }
+    .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); align-items:center; justify-content:center; }
+    .modal.active { display:flex; }
+    .modal-content { background:#fff; padding:1rem; max-width:90%; width:90%; }
+    .progress-bar { width: 100%; height: 8px; background: #eee; border-radius: 4px; overflow: hidden; display: none; }
+    .progress-bar.active { display: block; }
+    .progress-bar > div { height: 100%; background: #00d1b2; width: 0%; transition: width 0.2s; }
+  </style>
+</head>
+<body>
+
+<header class="hero is-danger">
+  <div class="hero-body">
+    <h1 class="title">My Image Gallery</h1>
+  </div>
+</header>
+
+<section class="section">
+  <div class="container">
+    <div class="field has-addons mb-4">
+      <div class="control">
+        <button class="button is-primary" id="open-modal">Add Image</button>
+      </div>
+      <div class="control">
+        <label class="checkbox">
+          <input type="checkbox" id="private-toggle">
+          Private (gallery-private bucket)
+        </label>
+      </div>
+    </div>
+    <div class="gallery" id="gallery"></div>
+  </div>
+</section>
+
+<div class="modal" id="modal">
+  <div class="modal-content">
+    <h2 class="title">Add Image</h2>
+    <form id="item-form">
+      <div class="field">
+        <label class="label">Image file</label>
+        <input type="file" id="file-input" accept="image/*" required>
+      </div>
+      <div class="field">
+        <label class="label">Caption</label>
+        <textarea class="textarea" id="caption" rows="3"></textarea>
+      </div>
+      <div class="field">
+        <label class="label">Tags (comma-separated)</label>
+        <input type="text" id="tags" class="input" placeholder="e.g. portrait, sunset">
+      </div>
+      <div class="field">
+        <label class="label">Comment (optional)</label>
+        <textarea class="textarea" id="comment" rows="2"></textarea>
+      </div>
+      <div class="field">
+        <label class="checkbox">
+          <input type="checkbox" id="private-toggle">
+          Private (only visible to me)
+        </label>
+      </div>
+      
+      <!-- Upload progress -->
+      <div class="progress-bar" id="progress-bar">
+        <div id="progress-fill"></div>
+      </div>
+      <p class="has-text-centered is-size-7" id="progress-text"></p>
+      
+      <div class="field">
+        <button class="button is-primary" type="submit">Save</button>
+        <a class="button is-light" href="#" id="close-modal">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script>
+// ==== CONFIG - PLACEHOLDERS (replaced at build by Netlify) ====
+const SUPABASE_URL = '__SUPABASE_URL__';
+const ANON_KEY = '__ANON_KEY__';
+// ===============================================================
+
+const API_BASE = '/.netlify/functions/api';
+
+let token = null;
+
+async function login() {
+  token = 'dummy-admin-token';
+}
+
+async function loadGallery() {
+  const gallery = document.getElementById('gallery');
+  gallery.innerHTML = '<p class="has-text-centered">Loading...</p>';
+  
+  try {
+    const res = await axios.get(`${SUPABASE_URL}/rest/v1/gallery_items?order=created_at.desc`, {
+      headers: { 'apikey': ANON_KEY, 'Authorization': `Bearer ${token}` }
+    });
+    gallery.innerHTML = '';
+    res.data.forEach(item => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <img src="${item.image_url}" alt="${item.caption || ''}">
+        <div class="info">
+          <strong>${item.caption || ''}</strong><br>
+          <small>${item.tags ? item.tags.join(', ') : ''}</small>
+          ${item.bucket === 'gallery-private' ? '<span class="tag is-warning is-small ml-2">Private</span>' : ''}
+        </div>
+      `;
+      gallery.appendChild(card);
+    });
+  } catch (err) {
+    gallery.innerHTML = '<p class="has-text-centered has-text-danger">Failed to load gallery</p>';
+    console.error(err);
+  }
+}
+
+document.getElementById('open-modal').addEventListener('click', () => {
+  document.getElementById('modal').classList.add('active');
+  document.getElementById('item-form').reset();
+  document.getElementById('progress-bar').classList.remove('active');
+  document.getElementById('progress-text').textContent = '';
+});
+document.getElementById('close-modal').addEventListener('click', () => {
+  document.getElementById('modal').classList.remove('active');
+});
+
+document.getElementById('item-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  
+  const file = document.getElementById('file-input').files[0];
+  const caption = document.getElementById('caption').value;
+  const tags = document.getElementById('tags').value.split(',').map(t => t.trim()).filter(t => t);
+  const comment = document.getElementById('comment').value;
+  const bucket = document.getElementById('private-toggle').checked ? 'gallery-private' : 'gallery-public';
+  
+  if (!file) return alert('Pick an image');
+  
+  const submitBtn = document.querySelector('#item-form button[type="submit"]');
+  const progressBar = document.getElementById('progress-bar');
+  const progressFill = document.getElementById('progress-fill');
+  const progressText = document.getElementById('progress-text');
+  
+  submitBtn.disabled = true;
+  progressBar.classList.add('active');
+  progressFill.style.width = '0%';
+  progressText.textContent = 'Getting upload URL...';
+  
+  try {
+    // Step 1: Get signed upload URL
+    const urlRes = await axios.get(`${API_BASE}/upload-url`, {
+      params: { bucket, filename: file.name }
+    });
+    
+    const { signedUrl, objectPath, publicUrl } = urlRes.data;
+    
+    progressText.textContent = 'Uploading to Supabase...';
+    progressFill.style.width = '10%';
+    
+    // Step 2: Upload file directly to Supabase Storage
+    await axios.put(signedUrl, file, {
+      headers: { 'Content-Type': file.type },
+      onUploadProgress: (progressEvent) => {
+        const percent = Math.round((progressEvent.loaded / progressEvent.total) * 90) + 10;
+        progressFill.style.width = `${percent}%`;
+        progressText.textContent = `Uploading... ${percent}%`;
+      }
+    });
+    
+    progressText.textContent = 'Saving metadata...';
+    progressFill.style.width = '95%';
+    
+    // Step 3: Save metadata to database
+    await axios.post(`${API_BASE}/save-metadata`, {
+      objectPath,
+      bucket,
+      caption,
+      tags,
+      comment
+    }, { headers: { 'Content-Type': 'application/json' } });
+    
+    progressFill.style.width = '100%';
+    progressText.textContent = 'Done!';
+    
+    // Refresh gallery
+    setTimeout(() => {
+      document.getElementById('modal').classList.remove('active');
+      document.getElementById('item-form').reset();
+      progressBar.classList.remove('active');
+      loadGallery();
+    }, 500);
+    
+  } catch (err) {
+    console.error(err);
+    alert('Upload failed: ' + (err.response?.data?.error || err.message));
+    progressBar.classList.remove('active');
+  } finally {
+    submitBtn.disabled = false;
+  }
+});
+
+login();
+loadGallery();
+</script>
+</body>
+</html>
