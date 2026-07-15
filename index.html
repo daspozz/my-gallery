@@ -76,11 +76,13 @@
 
 <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 <script>
-// ==== CONFIG - REPLACE THESE THREE VALUES ====
-const SUPABASE_URL = 'https://xrrwoeduzjchgkkxpbia.supabase.co;
-const ANON_KEY = 'sb_publishable_D2dOVqH8EZN3tMfip7Fgyw_htUiPsa2';
-const UPLOAD_ENDPOINT = 'https://chipper-meringue-cb5b77.netlify.app/.netlify/functions/api/upload';
+// ==== CONFIG - REPLACE THESE TWO VALUES ====
+const SUPABASE_URL = 'https://xrrwoeduzjchgkkxpbia.supabase.co/rest/v1/';  // ← from Supabase Settings → API → Project URL
+const ANON_KEY = 'sb_publishable_D2dOVqH8EZN3tMfip7Fgyw_htUiPsa2';                          // ← from Supabase Settings → API → anon/public key
 // ===============================================
+
+// Your Netlify site (already filled in)
+const UPLOAD_ENDPOINT = 'https://chipper-meringue-cb5b77.netlify.app/.netlify/functions/api/upload';
 
 let token = null;
 
